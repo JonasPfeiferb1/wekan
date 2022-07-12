@@ -271,7 +271,7 @@ Template.listMorePopup.events({
       )} linkedId: ${
         this._id
       } at client/components/lists/listHeader.js and https://github.com/wekan/wekan/issues/2785`;
-      alert(message);
+      this.error.set(message);
     }
     Utils.goBoardId(this.boardId);
   }),

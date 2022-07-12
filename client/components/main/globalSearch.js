@@ -236,9 +236,8 @@ class GlobalSearchComponent extends CardSearchPagedComponent {
 
           try {
             navigator.clipboard.writeText(selector.textContent);
-            alert("Selector copied to clipboard");
           } catch(err) {
-            alert("Error copying text: " + err);
+            this.error.set("Error copying text: " + err);
           }
 
         },
@@ -248,9 +247,8 @@ class GlobalSearchComponent extends CardSearchPagedComponent {
 
           try {
             navigator.clipboard.writeText(projection.textContent);
-            alert("Projection copied to clipboard");
           } catch(err) {
-            alert("Error copying text: " + err);
+            this.error.set("Error copying text: " + err);
           }
 
         },

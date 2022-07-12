@@ -1190,7 +1190,7 @@ BlazeComponent.extendComponent({
               'delete-linked-card-before-this-card',
             )} linkedId: ${this._id
               } at client/components/cards/cardDetails.js and https://github.com/wekan/wekan/issues/2785`;
-            alert(message);
+            this.error.set(message);
           }
           Utils.goBoardId(this.boardId);
         }),

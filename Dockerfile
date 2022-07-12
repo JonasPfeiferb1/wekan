@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+#FROM ubuntu:22.04
+FROM quay.io/linuxserver.io/baseimage-ubuntu:jammy
 LABEL maintainer="wekan"
 
 # 2022-04-25:

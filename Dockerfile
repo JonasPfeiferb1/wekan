@@ -249,7 +249,7 @@ RUN \
     #sed -i 's/VERBOSITY="--silent"/VERBOSITY="--progress-bar"/' ./install_meteor.sh && \
     echo "Starting meteor ${METEOR_RELEASE} installation...   \n" && \
     #gosu wekan:wekan curl https://install.meteor.com/ | /bin/sh && \
-    gosu wekan:wekan /bin/sh /home/wekan/app/install_meteor.sh && \
+    gosu wekan:wekan npm install -g meteor && \
     mv /root/.meteor /home/wekan/ && \
     chown wekan --recursive /home/wekan/.meteor && \
     \

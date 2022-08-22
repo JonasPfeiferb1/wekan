@@ -3,17 +3,10 @@ import Avatars from '/models/avatars';
 import Users from '/models/users';
 import Org from '/models/org';
 import Team from '/models/team';
-import { formatFleURL } from 'meteor/ostrio:files/lib';
 
 Template.userAvatar.helpers({
   userData() {
-    // We need to handle a special case for the search results provided by the
-    // `matteodem:easy-search` package. Since these results gets published in a
-    // separate collection, and not in the standard Meteor.Users collection as
-    // expected, we use a component parameter ("property") to distinguish the
-    // two cases.
-    const userCollection = this.esSearch ? ESSearchResults : Users;
-    return userCollection.findOne(this.userId, {
+    return Users.findOne(this.userId, {
       fields: {
         profile: 1,
         username: 1,
@@ -95,8 +88,7 @@ BlazeComponent.extendComponent({
 
 Template.boardOrgRow.helpers({
   orgData() {
-    const orgCollection = this.esSearch ? ESSearchResults : Org;
-    return orgCollection.findOne(this.orgId);
+    return Org.findOne(this.orgId);
   },
   currentUser(){
     return Meteor.user();
@@ -158,8 +150,7 @@ BlazeComponent.extendComponent({
 
 Template.boardTeamRow.helpers({
   teamData() {
-    const teamCollection = this.esSearch ? ESSearchResults : Team;
-    return teamCollection.findOne(this.teamId);
+    return Team.findOne(this.teamId);
   },
   currentUser(){
     return Meteor.user();
@@ -226,13 +217,6 @@ BlazeComponent.extendComponent({
               },
               false,
             );
-            uploader.on('uploaded', (error, fileRef) => {
-              if (!error) {
-                self.setAvatar(
-                  `${formatFleURL(fileRef)}?auth=false&brokenIsFine=true`,
-                );
-              }
-            });
             uploader.on('error', (error, fileData) => {
               self.setError(error.reason);
             });
@@ -246,8 +230,9 @@ BlazeComponent.extendComponent({
         'click .js-select-initials'() {
           this.setAvatar('');
         },
-        'click .js-delete-avatar'() {
+        'click .js-delete-avatar'(event) {
           Avatars.remove(this.currentData()._id);
+          event.stopPropagation();
         },
       },
     ];

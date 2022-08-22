@@ -1,15 +1,42 @@
 import { Meteor } from 'meteor/meteor';
 import { FilesCollection } from 'meteor/ostrio:files';
+import { isFileValid } from './fileValidation';
 import { createBucket } from './lib/grid/createBucket';
 import fs from 'fs';
 import path from 'path';
 import { AttachmentStoreStrategyFilesystem, AttachmentStoreStrategyGridFs} from '/models/lib/attachmentStoreStrategy';
 import FileStoreStrategyFactory, {moveToStorage, rename, STORAGE_NAME_FILESYSTEM, STORAGE_NAME_GRIDFS} from '/models/lib/fileStoreStrategy';
 
+let attachmentUploadExternalProgram;
+let attachmentUploadMimeTypes = [];
+let attachmentUploadSize = 0;
 let attachmentBucket;
 let storagePath;
+
 if (Meteor.isServer) {
   attachmentBucket = createBucket('attachments');
+
+  if (process.env.ATTACHMENTS_UPLOAD_MIME_TYPES) {
+    attachmentUploadMimeTypes = process.env.ATTACHMENTS_UPLOAD_MIME_TYPES.split(',');
+    attachmentUploadMimeTypes = attachmentUploadMimeTypes.map(value => value.trim());
+  }
+
+  if (process.env.ATTACHMENTS_UPLOAD_MAX_SIZE) {
+    attachmentUploadSize = parseInt(process.env.ATTACHMENTS_UPLOAD_MAX_SIZE);
+
+    if (isNaN(attachmentUploadSize)) {
+      attachmentUploadSize = 0
+    }
+  }
+
+  if (process.env.ATTACHMENTS_UPLOAD_EXTERNAL_PROGRAM) {
+    attachmentUploadExternalProgram = process.env.ATTACHMENTS_UPLOAD_EXTERNAL_PROGRAM;
+
+    if (!attachmentUploadExternalProgram.includes("{file}")) {
+      attachmentUploadExternalProgram = undefined;
+    }
+  }
+
   storagePath = path.join(process.env.WRITABLE_PATH, 'attachments');
 }
 
@@ -23,24 +50,50 @@ Attachments = new FilesCollection({
   collectionName: 'attachments',
   allowClientCode: true,
   namingFunction(opts) {
-    const filenameWithoutExtension = opts.name.replace(/(.+)\..+/, "$1");
-    const ret = opts.meta.fileId + "-original-" + filenameWithoutExtension;
+    let filenameWithoutExtension = ""
+    let fileId = "";
+    if (opts?.name) {
+      // Client
+      filenameWithoutExtension = opts.name.replace(/(.+)\..+/, "$1");
+      fileId = opts.meta.fileId;
+      delete opts.meta.fileId;
+    } else if (opts?.file?.name) {
+      // Server
+      if (opts.file.extension) {
+        filenameWithoutExtension = opts.file.name.replace(new RegExp(opts.file.extensionWithDot + "$"), "")
+      } else {
+        // file has no extension, so don't replace anything, otherwise the last character is removed (because extensionWithDot = '.')
+        filenameWithoutExtension = opts.file.name;
+      }
+      fileId = opts.fileId;
+    }
+    else {
+      // should never reach here
+      filenameWithoutExtension = Math.random().toString(36).slice(2);
+      fileId = Math.random().toString(36).slice(2);
+    }
+    const ret = fileId + "-original-" + filenameWithoutExtension;
     // remove fileId from meta, it was only stored there to have this information here in the namingFunction function
-    delete opts.meta.fileId;
     return ret;
+  },
+  sanitize(str, max, replacement) {
+    // keep the original filename
+    return str;
   },
   storagePath() {
     const ret = fileStoreStrategyFactory.storagePath;
     return ret;
   },
   onAfterUpload(fileObj) {
-    let storage = fileObj.meta.copyStorage || STORAGE_NAME_GRIDFS;
     // current storage is the filesystem, update object and database
     Object.keys(fileObj.versions).forEach(versionName => {
       fileObj.versions[versionName].storage = STORAGE_NAME_FILESYSTEM;
     });
+
     Attachments.update({ _id: fileObj._id }, { $set: { "versions" : fileObj.versions } });
-    moveToStorage(fileObj, storage, fileStoreStrategyFactory);
+
+    let storageDestination = fileObj.meta.copyStorage || STORAGE_NAME_GRIDFS;
+    Meteor.defer(() => Meteor.call('validateAttachmentAndMoveToStorage', fileObj._id, storageDestination));
   },
   interceptDownload(http, fileObj, versionName) {
     const ret = fileStoreStrategyFactory.getFileStrategy(fileObj, versionName).interceptDownload(http, this.cacheControl);
@@ -57,10 +110,16 @@ Attachments = new FilesCollection({
   // - if the board is public, everyone (even unconnected) can download it
   // - if the board is private, only board members can download it
   protected(fileObj) {
+    // file may have been deleted already again after upload validation failed
+    if (!fileObj) {
+      return false;
+    }
+
     const board = Boards.findOne(fileObj.meta.boardId);
     if (board.isPublic()) {
       return true;
     }
+
     return board.hasMember(this.userId);
   },
 });
@@ -93,6 +152,28 @@ if (Meteor.isServer) {
 
       const fileObj = Attachments.findOne({_id: fileObjId});
       rename(fileObj, newName, fileStoreStrategyFactory);
+    },
+    validateAttachment(fileObjId) {
+      check(fileObjId, String);
+
+      const fileObj = Attachments.findOne({_id: fileObjId});
+      const isValid = Promise.await(isFileValid(fileObj, attachmentUploadMimeTypes, attachmentUploadSize, attachmentUploadExternalProgram));
+
+      if (!isValid) {
+        Attachments.remove(fileObjId);
+      }
+    },
+    validateAttachmentAndMoveToStorage(fileObjId, storageDestination) {
+      check(fileObjId, String);
+      check(storageDestination, String);
+
+      Meteor.call('validateAttachment', fileObjId);
+
+      const fileObj = Attachments.findOne({_id: fileObjId});
+
+      if (fileObj) {
+        Meteor.defer(() => Meteor.call('moveAttachmentToStorage', fileObjId, storageDestination));
+      }
     },
   });
 

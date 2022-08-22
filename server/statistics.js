@@ -86,6 +86,7 @@ if (Meteor.isServer) {
           mongoOplogEnabled = oplogEnabled;
         } catch (e) {
           try {
+            const { mongo } = MongoInternals.defaultRemoteCollectionDriver();
             const { version } = Promise.await(
               mongo.db.command({ buildinfo: 1 }),
             );

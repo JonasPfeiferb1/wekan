@@ -2,6 +2,7 @@
 import { SyncedCron } from 'meteor/percolate:synced-cron';
 import { TAPi18n } from '/imports/i18n';
 import ImpersonatedUsers from './impersonatedUsers';
+import { Index, MongoDBEngine } from 'meteor/easy:search'
 
 // Sandstorm context is detected using the METEOR_SETTINGS environment variable
 // in the package definition.
@@ -337,6 +338,13 @@ Users.attachSchema(
       type: Date,
       optional: true,
     },
+    'profile.rescueCardDescription': {
+      /**
+       * show dialog for saving card description on unintentional card closing
+       */
+      type: Boolean,
+      optional: true,
+    },
     'profile.showCardsCountAt': {
       /**
        * showCardCountAt field of the user
@@ -530,9 +538,10 @@ Users.allow({
 // Search a user in the complete server database by its name, username or emails adress. This
 // is used for instance to add a new user to a board.
 const searchInFields = ['username', 'profile.fullname', 'emails.address'];
-Users.initEasySearch(searchInFields, {
-  use: 'mongo-db',
-  returnFields: [...searchInFields, 'profile.avatarUrl'],
+Users.search_index = new Index({
+  collection: Users,
+  fields: searchInFields,
+  engine: new MongoDBEngine(),
 });
 
 Users.safeFields = {
@@ -794,6 +803,11 @@ Users.helpers({
     return profile.hiddenMinicardLabelText || false;
   },
 
+  hasRescuedCardDescription(){
+    const profile = this.profile || {};
+    return profile.rescueCardDescription || false;
+  },
+
   getEmailBuffer() {
     const { emailBuffer = [] } = this.profile || {};
     return emailBuffer;
@@ -1004,6 +1018,13 @@ Users.mutations({
       },
     };
   },
+  toggleRescueCardDescription(value = false) {
+    return {
+      $set: {
+        'profile.rescueCardDescription': !value,
+      },
+    };
+  },
 
   addNotification(activityId) {
     return {
@@ -1102,6 +1123,10 @@ Meteor.methods({
   toggleMinicardLabelText() {
     const user = Meteor.user();
     user.toggleLabelText(user.hasHiddenMinicardLabelText());
+  },
+  toggleRescueCardDescription() {
+    const user = Meteor.user();
+    user.toggleRescueCardDescription(user.hasRescuedCardDescription());
   },
   changeLimitToShowCardsCount(limit) {
     check(limit, Number);

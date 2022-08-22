@@ -10,10 +10,10 @@ function currentListIsInThisSwimlane(swimlaneId) {
 
 function currentCardIsInThisList(listId, swimlaneId) {
   const currentCard = Utils.getCurrentCard();
-  const currentUser = Meteor.user();
+  //const currentUser = Meteor.user();
   if (
-    currentUser &&
-    currentUser.profile &&
+    //currentUser &&
+    //currentUser.profile &&
     Utils.boardView() === 'board-view-swimlanes'
   )
     return (
@@ -21,7 +21,15 @@ function currentCardIsInThisList(listId, swimlaneId) {
       currentCard.listId === listId &&
       currentCard.swimlaneId === swimlaneId
     );
-  else return currentCard && currentCard.listId === listId;
+  else if (
+    //currentUser &&
+    //currentUser.profile &&
+    Utils.boardView() === 'board-view-lists'
+  )
+    return (
+      currentCard &&
+      currentCard.listId === listId
+    );
 
   // https://github.com/wekan/wekan/issues/1623
   // https://github.com/ChronikEwok/wekan/commit/cad9b20451bb6149bfb527a99b5001873b06c3de
@@ -77,11 +85,18 @@ function initSortable(boardComponent, $listsDom) {
       const listDomElement = ui.item.get(0);
       const list = Blaze.getData(listDomElement);
 
+      /*
+            Reverted incomplete change list width,
+            removed from below Lists.update:
+             https://github.com/wekan/wekan/issues/4558
+                $set: {
+                  width: list._id.width(),
+                  height: list._id.height(),
+      */
+
       Lists.update(list._id, {
         $set: {
           sort: sortIndex.base,
-          width: list._id.width(),
-          height: list._id.height(),
         },
       });
 
@@ -99,7 +114,7 @@ function initSortable(boardComponent, $listsDom) {
   //}
 
   boardComponent.autorun(() => {
-    if (Utils.isMiniScreenOrShowDesktopDragHandles()) {
+    if (Utils.isTouchScreenOrShowDesktopDragHandles()) {
       $listsDom.sortable({
         handle: '.js-list-handle',
       });
@@ -185,7 +200,7 @@ BlazeComponent.extendComponent({
           // his mouse.
 
           const noDragInside = ['a', 'input', 'textarea', 'p'].concat(
-            Utils.isMiniScreenOrShowDesktopDragHandles()
+            Utils.isTouchScreenOrShowDesktopDragHandles()
               ? ['.js-list-handle', '.js-swimlane-header-handle']
               : ['.js-list-header'],
           );
